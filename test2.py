@@ -1,11 +1,5 @@
-import streamlit as st
 import os
 import re
-from docx import Document
-from docx.shared import Pt
-from docx.enum.text import WD_COLOR_INDEX
-from docx.oxml.ns import qn
-from io import BytesIO
 
 def half_to_full_width(text):
     trans_table = str.maketrans(
@@ -49,13 +43,9 @@ def normalize_blank_lines(content):
             previous_line_was_blank = True
     return "\n".join(new_lines)
 
-def create_document(uploaded_file, output_file):
-    content = uploaded_file.getvalue().decode("utf-8")
-
-    # 改行コードを自動変換してファイルを読み取る
-    content = content.replace('\r\n', '\n')
-
-    template_file = "temp.docx"
+def create_text_file(input_file, output_file):
+    with open(input_file, "r", encoding="utf-8") as file:
+        content = file.read()
 
     replacements = [
         #空白の無駄なテキストレイヤー削除
@@ -68,64 +58,29 @@ def create_document(uploaded_file, output_file):
         (r'(^(?:Ｎ|N|N)[\s　]+)(?=.+\n)', r''),
 
         #2行目以降のセリフの頭に空白があった場合削除
-        (r'(^[\s　]+(?=(?:.+\n)[\s　]*))', r''),
+        #(r'^\s+(?=(?:.+\n)[\s　])', r''),
 
         #例えば1行目と3行目は頭に空白がなく、2行目だけある場合（頭に空白がない行に、空白がある行が挟まれている）など削除
-        (r'^[\s　]+(?=\S+\n+)', r''),
+        #(r'^[\s　]+(?=\S+\n+)', r''),
 
         #V14, 1削除、前半のタイムコードの後ろに　N　セリフ、改行2回して後半のタイムコードの後ろにON
-        (r'(\d{4})[\s　]-[\s　](\d{4})\n(V\d{1,2},[\s　]\d)\n((?:.+(?:\n|))*)', r'\1　　N　　\4\n\n\2　　ON\n'),
+        #(r'(\d{4})\s-\s(\d{4})\n(V\d{1,2},\s\d)\n((?:.+(?:\n|))*)', r'\1　　N　　\4\n\n\2　　ON\n'),
 
         #セリフの2行目以降の頭を1行目にそろえる
-        (r'(^(?!.*\d{4}(?: |　)*(?:N|ON)(?: |　)*.*).+$)', r'　　　　　　　　　\1'),
-        #(r"(^(?!(?:\d{4}　　(?:Ｎ|ＯＮ))).+$)",r"　　　　　　　　　\1")
+        #(r'(^(?!.*\d{4}(?: |　)*(?:N|ON)(?: |　)*.*).+$)', r'　　　　　　　　　\1'),
+        #(r"(^(?!(\d{4}[\s　]{2})).+$)",r"　　　　　　　　　\1")
     ]
     content = process_text(content, replacements)
     content = remove_first_duplicate_line(content)
     content = normalize_blank_lines(content)
     content = half_to_full_width(content)
 
-    doc = Document(template_file)
-    doc.add_paragraph(content)
+    with open(output_file, "w", encoding="utf-8") as output:
+        output.write(content)
 
-    if not doc.paragraphs[0].text.strip():
-        p = doc.paragraphs[0]._element
-        p.getparent().remove(p)
+    print("Text file has been created successfully!")
 
-    regex = re.compile(r'[０-９]{4}　　ＯＮ')
-    for paragraph in doc.paragraphs:
-        original_text = paragraph.text
-        if regex.search(original_text):
-            paragraph.clear()
-            last_end = 0
-            for match in regex.finditer(original_text):
-                paragraph.add_run(original_text[last_end:match.start()])
-                highlighted_run = paragraph.add_run(match.group())
-                highlighted_run.font.highlight_color = WD_COLOR_INDEX.GRAY_50
-                last_end = match.end()
-            paragraph.add_run(original_text[last_end:])
-
-    for paragraph in doc.paragraphs:
-        for run in paragraph.runs:
-            run.font.name = 'Hiragino Maru Gothic Pro'
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Hiragino Maru Gothic Pro')
-            run.font.size = Pt(10.5)
-
-    # バイナリ形式でWordファイルを作成
-    output = BytesIO()
-    doc.save(output)
-    output.seek(0)
-    return output
-
-st.title("ナレーション原稿作成アプリ")
-
-uploaded_file = st.file_uploader("1. テキストファイルをアップロードしてください", type=["txt"])
-if uploaded_file:
-    st.write("アップロードが完了しました。")
-    output = create_document(uploaded_file, "output.docx")
-    st.download_button(
-        label="ダウンロード",
-        data=output.getvalue(),
-        file_name="output.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+if __name__ == "__main__":
+    input_file = r"E:\sea01\Documents\Programming\python\vivia\narration\v2\txt\new2.txt"
+    output_file = r"txt/test15.txt"
+    create_text_file(input_file, output_file)
